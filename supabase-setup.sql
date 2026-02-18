@@ -28,9 +28,23 @@ INSERT INTO public.sucursales (nombre, token_qr, latitud, longitud)
 VALUES ('Sucursal Principal', 'sucursal-principal-123', 19.4326, -99.1332)
 ON CONFLICT (token_qr) DO NOTHING;
 
--- 4. Habilitar Realtime para actualizaciones en vivo
-ALTER PUBLICATION supabase_realtime ADD TABLE asistencias;
-ALTER PUBLICATION supabase_realtime ADD TABLE perfiles;
+-- 4. Habilitar Realtime para actualizaciones en vivo (solo si no están ya agregadas)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'asistencias'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE asistencias;
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'perfiles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE perfiles;
+  END IF;
+END $$;
 
 -- INSTRUCCIONES PARA CREAR EL USUARIO ADMIN:
 -- 1. Ve al Dashboard de Supabase > Authentication > Users
