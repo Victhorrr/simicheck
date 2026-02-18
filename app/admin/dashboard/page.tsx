@@ -1,12 +1,26 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import React from 'react'
 import { supabase } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { QRCodeSVG } from 'qrcode.react'
-import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
+import AdminLayout from '@/components/AdminLayout'
+import StatCard from '@/components/StatCard'
+import BentoGrid from '@/components/BentoGrid'
+import RealtimeTable from '@/components/RealtimeTable'
+import QRGenerator from '@/components/QRGenerator'
+import {
+  Users,
+  Clock,
+  TrendingUp,
+  Building2,
+  Activity,
+  Timer,
+  CheckCircle,
+  AlertTriangle
+} from 'lucide-react'
 
 interface Asistencia {
   id: string
@@ -32,36 +46,21 @@ interface EmpleadoEnSede {
 }
 
 export default function AdminDashboard() {
-  const [user, setUser] = useState<any>(null)
   const [asistencias, setAsistencias] = useState<Asistencia[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [empleadosEnSede, setEmpleadosEnSede] = useState<EmpleadoEnSede[]>([])
   const [chartData, setChartData] = useState<any[]>([])
+  const [newRecordIds, setNewRecordIds] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    checkAdmin()
-  }, [])
-
-  const checkAdmin = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-    if (user.email !== 'drhdogu@hotmail.com') {
-      toast.error('Acceso denegado')
-      window.location.href = '/'
-      return
-    }
-    setUser(user)
     fetchData()
     setupRealtime()
-    setIsLoading(false)
-  }
+  }, [])
 
   const fetchData = async () => {
+    setIsLoading(true)
+
     // Fetch asistencias with joins
     const { data: asistenciasData, error: asistenciasError } = await supabase
       .from('asistencias')
@@ -74,7 +73,8 @@ export default function AdminDashboard() {
       .limit(100)
 
     if (asistenciasError) {
-      toast.error('Error al cargar asistencias')
+      console.error('Error fetching asistencias:', asistenciasError)
+      setIsLoading(false)
       return
     }
 
@@ -86,24 +86,30 @@ export default function AdminDashboard() {
       .select('*')
 
     if (sucursalesError) {
-      toast.error('Error al cargar sucursales')
-      return
+      console.error('Error fetching sucursales:', sucursalesError)
+    } else {
+      setSucursales(sucursalesData || [])
     }
-
-    setSucursales(sucursalesData || [])
 
     // Calculate empleados en sede
     calculateEmpleadosEnSede(asistenciasData || [])
 
     // Prepare chart data
     prepareChartData(asistenciasData || [])
+
+    setIsLoading(false)
   }
 
   const setupRealtime = () => {
     const channel = supabase
       .channel('asistencias_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias' }, (payload) => {
-        fetchData()
+        if (payload.eventType === 'INSERT' && payload.new) {
+          setNewRecordIds(prev => [...prev, (payload.new as any).id])
+          fetchData() // Refresh data
+        } else {
+          fetchData() // Refresh data for updates/deletes
+        }
       })
       .subscribe()
   }
@@ -153,150 +159,206 @@ export default function AdminDashboard() {
     setChartData(data)
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/'
-  }
+  // Calculate KPIs
+  const today = new Date()
+  const todayStart = startOfDay(today)
+  const todayEnd = endOfDay(today)
+
+  const todayAsistencias = asistencias.filter(a => {
+    const asistenciaDate = new Date(a.created_at)
+    return asistenciaDate >= todayStart && asistenciaDate <= todayEnd
+  })
+
+  const totalPresentes = empleadosEnSede.length
+  const retardosHoy = todayAsistencias.filter(a => {
+    const asistenciaTime = new Date(a.created_at)
+    const expectedTime = new Date(asistenciaTime)
+    expectedTime.setHours(9, 0, 0, 0) // Assuming 9 AM start time
+    return a.tipo === 'entrada' && asistenciaTime > expectedTime
+  }).length
+
+  const sucursalMasActiva = asistencias.reduce((acc, curr) => {
+    acc[curr.sucursales.nombre] = (acc[curr.sucursales.nombre] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const sucursalTop = Object.entries(sucursalMasActiva).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A'
+
+  // Calculate trends (comparing with yesterday)
+  const yesterday = subDays(today, 1)
+  const yesterdayStart = startOfDay(yesterday)
+  const yesterdayEnd = endOfDay(yesterday)
+
+  const yesterdayAsistencias = asistencias.filter(a => {
+    const asistenciaDate = new Date(a.created_at)
+    return asistenciaDate >= yesterdayStart && asistenciaDate <= yesterdayEnd
+  })
+
+  const trendPresentes = totalPresentes - yesterdayAsistencias.filter(a => a.tipo === 'entrada').length
+  const trendRetardos = retardosHoy - yesterdayAsistencias.filter(a => {
+    const asistenciaTime = new Date(a.created_at)
+    const expectedTime = new Date(asistenciaTime)
+    expectedTime.setHours(9, 0, 0, 0)
+    return a.tipo === 'entrada' && asistenciaTime > expectedTime
+  }).length
+
+  const bentoItems: {
+    id: string
+    content: React.ReactNode
+    size: 'small' | 'medium' | 'large'
+    colSpan?: number
+  }[] = [
+    {
+      id: 'presentes',
+      content: (
+        <div className="h-full flex flex-col justify-between">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Presentes Hoy</span>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+              {totalPresentes}
+            </div>
+          </div>
+          <div className="flex items-center space-x-1">
+            <TrendingUp className={`h-4 w-4 ${trendPresentes >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+            <span className={`text-sm ${trendPresentes >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {trendPresentes > 0 ? '+' : ''}{trendPresentes} vs ayer
+            </span>
+          </div>
+        </div>
+      ),
+      size: 'medium'
+    },
+    {
+      id: 'retardos',
+      content: (
+        <div className="h-full flex flex-col justify-between">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <Timer className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Retardos Hoy</span>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+              {retardosHoy}
+            </div>
+          </div>
+          <div className="flex items-center space-x-1">
+            <TrendingUp className={`h-4 w-4 ${trendRetardos <= 0 ? 'text-green-500' : 'text-red-500'}`} />
+            <span className={`text-sm ${trendRetardos <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {trendRetardos > 0 ? '+' : ''}{trendRetardos} vs ayer
+            </span>
+          </div>
+        </div>
+      ),
+      size: 'medium'
+    },
+    {
+      id: 'sucursal-activa',
+      content: (
+        <div className="h-full flex flex-col justify-between">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <Building2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Sucursal Más Activa</span>
+            </div>
+            <div className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+              {sucursalTop}
+            </div>
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {sucursalMasActiva[sucursalTop] || 0} registros hoy
+          </div>
+        </div>
+      ),
+      size: 'medium'
+    },
+    {
+      id: 'chart',
+      content: (
+        <div className="h-full">
+          <div className="flex items-center space-x-2 mb-4">
+            <Activity className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Tendencia Semanal</span>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis
+                dataKey="date"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: '#6B7280' }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: '#6B7280' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1F2937',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#F9FAFB'
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="entradas"
+                stroke="#10B981"
+                strokeWidth={2}
+                dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
+                name="Entradas"
+              />
+              <Line
+                type="monotone"
+                dataKey="salidas"
+                stroke="#F59E0B"
+                strokeWidth={2}
+                dot={{ fill: '#F59E0B', strokeWidth: 2, r: 4 }}
+                name="Salidas"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ),
+      size: 'large',
+      colSpan: 2
+    }
+  ]
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Cargando...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-md">
-          <h1 className="text-2xl font-bold mb-6 text-center">Iniciar Sesión como Administrador</h1>
-          <form onSubmit={async (e) => {
-            e.preventDefault()
-            const formData = new FormData(e.target as HTMLFormElement)
-            const email = formData.get('email') as string
-            const password = formData.get('password') as string
-
-            const { error } = await supabase.auth.signInWithPassword({ email, password })
-            if (error) {
-              toast.error('Error al iniciar sesión')
-            } else {
-              checkAdmin()
-            }
-          }}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Email</label>
-              <input
-                type="email"
-                name="email"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Contraseña</label>
-              <input
-                type="password"
-                name="password"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              Iniciar Sesión
-            </button>
-          </form>
+      <AdminLayout>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
         </div>
-      </div>
+      </AdminLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Dashboard Administrativo</h1>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Cerrar Sesión
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Asistencias de Hoy</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="entradas" stroke="#8884d8" name="Entradas" />
-              <Line type="monotone" dataKey="salidas" stroke="#82ca9d" name="Salidas" />
-            </LineChart>
-          </ResponsiveContainer>
+    <AdminLayout>
+      <div className="space-y-8">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Monitorea la asistencia y actividad en tiempo real
+          </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Empleados Actualmente en Sede</h2>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {empleadosEnSede.map(empleado => (
-              <div key={empleado.id} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
-                <span>{empleado.nombre}</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">{empleado.sucursal}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+        {/* Bento Grid */}
+        <BentoGrid items={bentoItems} />
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-8">
-        <h2 className="text-xl font-semibold mb-4">Generar Códigos QR por Sucursal</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sucursales.map(sucursal => (
-            <div key={sucursal.id} className="text-center">
-              <h3 className="font-medium mb-2">{sucursal.nombre}</h3>
-              <QRCodeSVG value={sucursal.token_qr} size={128} />
-              <button
-                onClick={() => downloadQR(sucursal)}
-                className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-              >
-                Descargar QR
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* Realtime Table */}
+        <RealtimeTable asistencias={asistencias} newRecordIds={newRecordIds} />
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Últimas Asistencias</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full table-auto">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-700">
-                <th className="px-4 py-2 text-left">Empleado</th>
-                <th className="px-4 py-2 text-left">Sucursal</th>
-                <th className="px-4 py-2 text-left">Tipo</th>
-                <th className="px-4 py-2 text-left">Fecha/Hora</th>
-              </tr>
-            </thead>
-            <tbody>
-              {asistencias.slice(0, 20).map(asistencia => (
-                <tr key={asistencia.id} className="border-t">
-                  <td className="px-4 py-2">{asistencia.perfiles.nombre}</td>
-                  <td className="px-4 py-2">{asistencia.sucursales.nombre}</td>
-                  <td className="px-4 py-2 capitalize">{asistencia.tipo}</td>
-                  <td className="px-4 py-2">{format(new Date(asistencia.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* QR Generator */}
+        <QRGenerator />
       </div>
-    </div>
+    </AdminLayout>
   )
 }

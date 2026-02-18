@@ -10,11 +10,11 @@ import { es } from 'date-fns/locale'
 interface Asistencia {
   tipo: 'entrada' | 'salida'
   created_at: string
-  sucursales: any
+  sucursales: { nombre: string }[]
 }
 
 export default function MarcarPage() {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null)
   const [lastAsistencia, setLastAsistencia] = useState<Asistencia | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -37,19 +37,21 @@ export default function MarcarPage() {
       .select(`
         tipo,
         created_at,
-        sucursales (nombre)
+        sucursales!inner (nombre)
       `)
       .eq('empleado_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
-    if (error && error.code !== 'PGRST116') { // No rows
+    if (error) {
       toast.error('Error al cargar última asistencia')
       return
     }
 
-    setLastAsistencia(data as Asistencia)
+    if (data) {
+      setLastAsistencia(data as Asistencia)
+    }
   }
 
   const handleLogout = async () => {
@@ -138,7 +140,7 @@ export default function MarcarPage() {
               <div className="text-sm mt-2">
                 Última {lastAsistencia.tipo}: {format(new Date(lastAsistencia.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
                 <br />
-                Sucursal: {lastAsistencia.sucursales.nombre}
+                Sucursal: {lastAsistencia.sucursales[0]?.nombre}
               </div>
             )}
           </div>
