@@ -46,10 +46,10 @@ BEGIN
   END IF;
 END $$;
 
--- INSTRUCCIONES PARA CREAR EL USUARIO ADMIN:
--- 1. Ve al Dashboard de Supabase > Authentication > Users
--- 2. Haz clic en "Add user"
--- 3. Email: drhdogu@hotmail.com
--- 4. Password: simicheck
--- 5. Marca "Auto confirm user" si es para desarrollo
--- 6. El trigger automáticamente asignará el rol 'admin' a este usuario
+-- 5. Insertar perfil para el usuario admin si no existe
+INSERT INTO public.perfiles (id, nombre, rol)
+SELECT id, 'Admin', 'admin'
+FROM auth.users
+WHERE email = 'drhdogu@hotmail.com'
+AND NOT EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.users.id)
+ON CONFLICT (id) DO NOTHING;
