@@ -3,9 +3,6 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "projectSettings": {
-    "nodeVersion": "20.x"
-  },
   "env": [
     {
       "key": "NEXT_PUBLIC_SUPABASE_URL",
