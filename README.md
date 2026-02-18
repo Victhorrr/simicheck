@@ -1,33 +1,83 @@
-# Control de Asistencia Multi-Sucursal
+# 📱 Check-Simi - Sistema de Control de Asistencia
 
-Una aplicación web progresiva (PWA) para el control de asistencia de empleados en múltiples sucursales, utilizando geolocalización y códigos QR.
+Aplicación moderna de check-in/check-out con QR, geofencing y reportes en tiempo real. Diseño Linear/Vercel con dashboard administrativo completo.
 
-## 🚀 Características
+## ✨ Características Principales
 
-- **Control de Asistencia**: Registro de entrada/salida mediante escaneo de códigos QR
-- **Geolocalización**: Validación de ubicación GPS para asegurar que el empleado esté en la sucursal
-- **Dashboard Administrativo**: Panel en tiempo real con gráficos y estadísticas
-- **Aplicación Móvil**: Optimizada para dispositivos móviles con interfaz táctil
-- **Autenticación**: Sistema de login seguro con roles (admin/empleado)
-- **Tiempo Real**: Actualizaciones en vivo del estado de asistencia
-- **PWA**: Instalable en dispositivos móviles y funciona sin conexión
+### 🎯 Dashboard Admin (Linear/Vercel Style)
+- Sidebar colapsable con modo oscuro/claro
+- BentoGrid para KPIs (Presentes, Retardos, Sucursal Más Activa)
+- Tabla realtime con estados visuales (verde/ámbar) y animaciones
+- Gráficos de tendencias con Recharts
+- Generador de códigos QR con descarga PDF/PNG
 
-## 🛠️ Tecnologías Utilizadas
+### 📊 Páginas de Gestión
+- **Sucursales**: CRUD completo con coordenadas GPS
+- **Empleados**: Lista, edición y roles de usuarios
+- **Reportes**: Analytics avanzado, filtros de fecha, exportación JSON
 
-- **Frontend**: Next.js 14+ (App Router), TypeScript, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL, Auth, Realtime)
-- **Librerías**:
-  - `html5-qrcode` - Escaneo de códigos QR
-  - `recharts` - Gráficos y visualizaciones
-  - `qrcode.react` - Generación de códigos QR
-  - `sonner` - Notificaciones toast
-  - `date-fns` - Manejo de fechas
-  - `lucide-react` - Iconos
+### 🔐 Control de Asistencia
+- QR Scanner con alta velocidad (30 FPS)
+- Validación de sucursal + GPS
+- Geofencing (100m de radio)
+- Anti-fraude (previene check-ins dobles)
+- Realtime updates via Supabase
 
-## 📋 Prerrequisitos
+---
 
-- Node.js 18+
-- npm o yarn
+## 🚀 Guía de Deploy
+
+### ⚙️ Paso 1: Supabase Setup (5 min)
+
+1. Ir a https://supabase.com y crear proyecto
+2. Copiar en SQL Editor el contenido de `schema.sql`
+3. Ejecutar script
+4. Crear usuario admin:
+   - **Email**: `drhdogu@hotmail.com`
+   - **Password**: `simicheck`
+5. Copiar API keys de Settings → API
+
+### 🔑 Paso 2: Variables de Entorno
+
+Crear `.env.local`:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://tu-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_aqui
+```
+
+### 🌐 Paso 3: Deploy a Vercel
+
+**Opción CLI (Recomendado)**:
+```bash
+npm install -g vercel
+vercel
+# Seguir instrucciones interactivas
+```
+
+**Opción Dashboard**:
+1. https://vercel.com/dashboard
+2. "Add New" → "Project" → Selectionar repositorio
+3. Environment Variables → Añadir credenciales
+4. "Deploy"
+
+---
+
+## 💻 Desarrollo Local
+
+```bash
+npm install
+npm run dev
+# http://localhost:3000
+```
+
+## 📚 Rutas
+
+- `/` - Landing
+- `/marcar` - Check-in/out empleados
+- `/admin/dashboard` - Dashboard
+- `/admin/sucursales` - Gestión sucursales
+- `/admin/empleados` - Gestión empleados
+- `/admin/reportes` - Reportes
 - Cuenta en [Supabase](https://supabase.com)
 
 ## 🔧 Instalación
