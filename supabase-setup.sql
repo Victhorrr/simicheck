@@ -1,6 +1,9 @@
 -- Script SQL para Supabase - Configuración automática de perfiles de empleados
 -- Ejecutar en el SQL Editor de Supabase
 
+-- 1. Eliminar trigger si existe
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
 -- 1. Función que se ejecuta al detectar un nuevo usuario en Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
