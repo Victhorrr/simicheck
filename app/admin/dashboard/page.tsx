@@ -153,10 +153,9 @@ export default function AdminDashboard() {
     setChartData(data)
   }
 
-  const downloadQR = (sucursal: Sucursal) => {
-    // For simplicity, just copy the token to clipboard
-    navigator.clipboard.writeText(sucursal.token_qr)
-    toast.success(`Token QR copiado: ${sucursal.token_qr}`)
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
   }
 
   if (isLoading) {
@@ -217,7 +216,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-      <h1 className="text-3xl font-bold mb-8 text-center">Dashboard Administrativo</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Dashboard Administrativo</h1>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Cerrar Sesión
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
