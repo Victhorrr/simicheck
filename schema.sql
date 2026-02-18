@@ -1,5 +1,5 @@
 -- Crear tabla sucursales
-CREATE TABLE sucursales (
+CREATE TABLE IF NOT EXISTS sucursales (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   nombre TEXT NOT NULL,
   token_qr TEXT UNIQUE NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE sucursales (
 );
 
 -- Crear tabla perfiles
-CREATE TABLE perfiles (
+CREATE TABLE IF NOT EXISTS perfiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   nombre TEXT NOT NULL,
   rol TEXT DEFAULT 'empleado' CHECK (rol IN ('admin', 'empleado')),
@@ -18,7 +18,7 @@ CREATE TABLE perfiles (
 );
 
 -- Crear tabla asistencias
-CREATE TABLE asistencias (
+CREATE TABLE IF NOT EXISTS asistencias (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   empleado_id UUID REFERENCES perfiles(id) ON DELETE CASCADE NOT NULL,
   sucursal_id UUID REFERENCES sucursales(id) NOT NULL,
@@ -32,6 +32,15 @@ CREATE TABLE asistencias (
 ALTER TABLE sucursales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE perfiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asistencias ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Admin can manage sucursales" ON sucursales;
+DROP POLICY IF EXISTS "Users can view own profile" ON perfiles;
+DROP POLICY IF EXISTS "Admin can view all profiles" ON perfiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON perfiles;
+DROP POLICY IF EXISTS "Users can view own asistencias" ON asistencias;
+DROP POLICY IF EXISTS "Users can insert own asistencias" ON asistencias;
+DROP POLICY IF EXISTS "Admin can view all asistencias" ON asistencias;
 
 -- Políticas para sucursales (solo admin puede ver/editar)
 CREATE POLICY "Admin can manage sucursales" ON sucursales
@@ -80,6 +89,9 @@ CREATE POLICY "Admin can view all asistencias" ON asistencias
     )
   );
 
+-- Drop trigger if exists
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
 -- Trigger para insertar perfil automáticamente
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -89,7 +101,8 @@ BEGIN
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', 'Usuario'),
     CASE WHEN NEW.email = 'drhdogu@hotmail.com' THEN 'admin' ELSE 'empleado' END
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -98,6 +111,17 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Habilitar REPLICA en asistencias y perfiles para realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE asistencias;
-ALTER PUBLICATION supabase_realtime ADD TABLE perfiles;
+-- Habilitar REPLICA en asistencias y perfiles para realtime (only if not already enabled)
+DO $$ 
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE asistencias;
+EXCEPTION WHEN others THEN 
+  NULL;
+END $$;
+
+DO $$ 
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE perfiles;
+EXCEPTION WHEN others THEN 
+  NULL;
+END $$;
