@@ -1,13 +1,8 @@
 import type { NextConfig } from "next";
-import withPWA from "next-pwa";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: [],
-  webpack: (config) => config,
+  turbopack: {},
 };
 
-export default withPWA({
-  dest: "public",
-  register: true,
-  skipWaiting: true,
-})(nextConfig);
+export default nextConfig;
