@@ -1,6 +1,6 @@
 # 📱 Check-Simi - Sistema de Control de Asistencia
 
-Aplicación moderna de check-in/check-out con QR, geofencing y reportes en tiempo real. Diseño Linear/Vercel con dashboard administrativo completo.
+✅ **LIVE en Vercel** - Aplicación moderna de check-in/check-out con QR, geofencing y reportes en tiempo real. Diseño Linear/Vercel con dashboard administrativo completo.
 
 ## ✨ Características Principales
 
