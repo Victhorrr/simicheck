@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import AdminLayout from '@/components/AdminLayout'
+import AddressSearch from '@/components/AddressSearch'
 import { Building2, Plus, Edit, Trash2, MapPin } from 'lucide-react'
 
 interface Sucursal {
@@ -22,8 +23,9 @@ export default function SucursalesPage() {
   const [editingSucursal, setEditingSucursal] = useState<Sucursal | null>(null)
   const [formData, setFormData] = useState({
     nombre: '',
-    latitud: '',
-    longitud: ''
+    direccion: '',
+    latitud: 0,
+    longitud: 0
   })
 
   useEffect(() => {
@@ -48,16 +50,8 @@ export default function SucursalesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.nombre || !formData.latitud || !formData.longitud) {
+    if (!formData.nombre || !formData.direccion || formData.latitud === 0 || formData.longitud === 0) {
       toast.error('Todos los campos son requeridos')
-      return
-    }
-
-    const lat = parseFloat(formData.latitud)
-    const lng = parseFloat(formData.longitud)
-
-    if (isNaN(lat) || isNaN(lng)) {
-      toast.error('Coordenadas inválidas')
       return
     }
 
@@ -67,8 +61,8 @@ export default function SucursalesPage() {
           .from('sucursales')
           .update({
             nombre: formData.nombre,
-            latitud: lat,
-            longitud: lng
+            latitud: formData.latitud,
+            longitud: formData.longitud
           })
           .eq('id', editingSucursal.id)
 
@@ -79,8 +73,8 @@ export default function SucursalesPage() {
           .from('sucursales')
           .insert({
             nombre: formData.nombre,
-            latitud: lat,
-            longitud: lng,
+            latitud: formData.latitud,
+            longitud: formData.longitud,
             token_qr: crypto.randomUUID()
           })
 
@@ -90,7 +84,7 @@ export default function SucursalesPage() {
 
       setIsModalOpen(false)
       setEditingSucursal(null)
-      setFormData({ nombre: '', latitud: '', longitud: '' })
+      setFormData({ nombre: '', direccion: '', latitud: 0, longitud: 0 })
       fetchSucursales()
     } catch (error) {
       toast.error((error as Error).message)
@@ -101,8 +95,9 @@ export default function SucursalesPage() {
     setEditingSucursal(sucursal)
     setFormData({
       nombre: sucursal.nombre,
-      latitud: sucursal.latitud.toString(),
-      longitud: sucursal.longitud.toString()
+      direccion: `${sucursal.latitud.toFixed(6)}, ${sucursal.longitud.toFixed(6)}`,
+      latitud: sucursal.latitud,
+      longitud: sucursal.longitud
     })
     setIsModalOpen(true)
   }
@@ -148,7 +143,7 @@ export default function SucursalesPage() {
           <button
             onClick={() => {
               setEditingSucursal(null)
-              setFormData({ nombre: '', latitud: '', longitud: '' })
+              setFormData({ nombre: '', direccion: '', latitud: 0, longitud: 0 })
               setIsModalOpen(true)
             }}
             className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
@@ -232,29 +227,14 @@ export default function SucursalesPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Latitud
+                    Dirección
                   </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.latitud}
-                    onChange={(e) => setFormData({ ...formData, latitud: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Longitud
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.longitud}
-                    onChange={(e) => setFormData({ ...formData, longitud: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    required
+                  <AddressSearch
+                    value={formData.direccion}
+                    onChange={(address, lat, lng) =>
+                      setFormData({ ...formData, direccion: address, latitud: lat, longitud: lng })
+                    }
+                    placeholder="Busca la dirección de la sucursal..."
                   />
                 </div>
 

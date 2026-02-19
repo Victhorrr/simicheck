@@ -11,7 +11,7 @@ interface Empleado {
   nombre: string
   rol: 'admin' | 'empleado'
   sucursal_id: string | null
-  sucursales?: { nombre: string }
+  sucursales?: { nombre: string } | null
   created_at: string
 }
 
@@ -38,21 +38,36 @@ export default function EmpleadosPage() {
   }, [])
 
   const fetchEmpleados = async () => {
-    const { data, error } = await supabase
-      .from('perfiles')
-      .select(`
-        *,
-        sucursales (nombre)
-      `)
-      .order('created_at', { ascending: false })
+    try {
+      const { data: empleadosData, error: empleadosError } = await supabase
+        .from('perfiles')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    if (error) {
+      if (empleadosError) throw empleadosError
+
+      // Get sucursales separately
+      const { data: sucursalesData, error: sucursalesError } = await supabase
+        .from('sucursales')
+        .select('id, nombre')
+
+      if (sucursalesError) throw sucursalesError
+
+      // Join manually
+      const empleadosConSucursal = empleadosData?.map((emp: Empleado) => ({
+        ...emp,
+        sucursales: emp.sucursal_id
+          ? sucursalesData?.find(s => s.id === emp.sucursal_id)
+          : null
+      })) || []
+
+      setEmpleados(empleadosConSucursal)
+      setIsLoading(false)
+    } catch (error) {
       toast.error('Error al cargar empleados')
-      return
+      console.error(error)
+      setIsLoading(false)
     }
-
-    setEmpleados(data || [])
-    setIsLoading(false)
   }
 
   const fetchSucursales = async () => {
